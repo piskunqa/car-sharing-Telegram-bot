@@ -23,7 +23,7 @@ DB_USER = "root"
 DB_PASSWORD = "9379992"
 
 # bot settings
-BOT_TOKEN = '1886302622:AAHqpo1H6AjROdgYKRCfooQe6vlFe5wnMWw'
+BOT_TOKEN = ''
 REPORT_CHAT_ID = -5046315229
 PLACES = range(1, 7)
 TIMEPICKER_DEFAULT_OPTIONS = {"24hour": True, "minute_step": 5}
