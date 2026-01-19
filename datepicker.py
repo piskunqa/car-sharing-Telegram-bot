@@ -19,7 +19,7 @@ class CallbackData:
            parsed = cb.parse(data)
    """
 
-    def __init__(self, prefix, *parts, sep=":"):
+    def __init__(self, prefix: str, *parts, sep=":"):
         """
             Initialize a CallbackData instance.
 
@@ -113,6 +113,12 @@ def create_calendar(name: str = "calendar", year: int = None, month: int = None,
 
         Returns:
             InlineKeyboardMarkup: Telegram inline keyboard with days and navigation buttons.
+            :param trip_id:
+            :param language: language code
+            :param month:
+            :param name:
+            :param year:
+            :param preset_id:
     """
     now_day = datetime.datetime.now()
     year = now_day.year if year is None else year

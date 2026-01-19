@@ -71,7 +71,7 @@ class DashboardView(AdminIndexView):
             else:
                 return True
 
-    def inaccessible_callback(self, name, **kwargs):
+    def inaccessible_callback(self, name: str, **kwargs):
         """
             Callback invoked when a user tries to access the view but is denied.
 
@@ -148,7 +148,7 @@ class SecureView(ModelView):
             else:
                 return True
 
-    def inaccessible_callback(self, name, **kwargs):
+    def inaccessible_callback(self, name: str, **kwargs):
         """
             Callback invoked when a user tries to access the view but is denied.
 

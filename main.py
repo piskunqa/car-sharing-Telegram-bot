@@ -31,6 +31,15 @@ change_calendar_callback = datepicker.CallbackData("change_date", "action", "yea
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('update:'))
 def update_all_handler(call):
+    """
+    Handles the "update" callback for passenger trips.
+
+    Searches for matching driver trips within ±1 hour of the passenger's start time,
+    filters them by route compatibility, and displays up to 10 suitable options.
+
+    :param call: CallbackQuery object with data in the format "update:<trip_id>"
+    :return: Edits the message to show matching trips or displays an alert if none found.
+    """
     _, trip_id = call.data.split(":", 1)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -67,6 +76,16 @@ def update_all_handler(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("show_last_menu"))
 def show_last_menu(call, text=None):
+    """
+    Displays the main menu for the user.
+
+    Can be triggered by either a CallbackQuery or a Message. Shows buttons for viewing
+    trips and creating a new trip.
+
+    :param call: CallbackQuery or Message object.
+    :param text: Optional localized text object.
+    :return: Sends or edits the main menu message.
+    """
     if not text:
         user = get_user(call)
         text = texts[user.lang]
@@ -74,7 +93,6 @@ def show_last_menu(call, text=None):
     markup.add(
         telebot.types.InlineKeyboardButton(text=text.text.my_trips, callback_data='my_trips_menu'),
         telebot.types.InlineKeyboardButton(text=text.text.new_trip, callback_data='new_drive'),
-        # telebot.types.InlineKeyboardButton(text=text.text.t_3, callback_data='update_all')
     )
     if isinstance(call, CallbackQuery):
         if ":" in call.data:
@@ -88,7 +106,21 @@ def show_last_menu(call, text=None):
         return bot.send_message(chat_id=call.chat.id, text=text.text.menu, reply_markup=markup)
 
 
-def on_time_selected(action, call, hour, minute, trip_id, preset_id=''):
+def on_time_selected(action: str, call: CallbackQuery, hour: int, minute: int, trip_id: str, preset_id: str = ''):
+    """
+    Handles time selection during trip creation.
+
+    Saves the selected time and activates the trip, cancels and returns to date selection,
+    or deletes the trip on error.
+
+    :param action: Action string ("ok", "cancel", or other).
+    :param call: CallbackQuery object.
+    :param hour: Selected hour.
+    :param minute: Selected minute.
+    :param trip_id: ID of the trip being created.
+    :param preset_id: Optional preset ID.
+    :return: None
+    """
     trip = Trips.get_or_none(id=trip_id)
     user = trip.user
     text = texts[user.lang]
@@ -125,7 +157,20 @@ def on_time_selected(action, call, hour, minute, trip_id, preset_id=''):
                                   reply_markup=markup)
 
 
-def on_time_edit(action, call, hour, minute, trip_id, preset_id=''):
+def on_time_edit(action: str, call: CallbackQuery, hour: int, minute: int, trip_id: str, preset_id: str = ''):
+    """
+    Handles time editing for an existing trip.
+
+    Updates the trip start time, ignores cancellation, or shows an error message.
+
+    :param action: Action string ("ok", "cancel", or other).
+    :param call: CallbackQuery object.
+    :param hour: Selected hour.
+    :param minute: Selected minute.
+    :param trip_id: ID of the trip being edited.
+    :param preset_id: Optional preset ID.
+    :return: None
+    """
     trip = Trips.get_or_none(id=trip_id)
     user = trip.user
     text = texts[user.lang]
@@ -146,6 +191,14 @@ edit_timepicker = TimePicker(bot, on_time_selected=on_time_edit).register(comman
 
 
 def get_user(message: Message | CallbackQuery):
+    """
+    Retrieves or creates a user record based on Telegram ID.
+
+    Updates username, full name, and language if necessary and persists changes.
+
+    :param message: Message or CallbackQuery object.
+    :return: Users model instance.
+    """
     user, is_created = Users.get_or_create(telegram_id=message.from_user.id)
     if user.telegram_username is None:
         user.telegram_username = message.from_user.username
@@ -160,7 +213,17 @@ def get_user(message: Message | CallbackQuery):
     return user
 
 
-def start_function(message, user):
+def start_function(message: Message, user: Users):
+    """
+    Displays the start menu to the user.
+
+    If the user has no Telegram username, prompts them to set one.
+    Otherwise, shows role selection and preset options.
+
+    :param message: Message object.
+    :param user: Users model instance.
+    :return: None
+    """
     markup = InlineKeyboardMarkup()
     text = texts[user.lang]
 
@@ -182,12 +245,28 @@ def start_function(message, user):
 
 @bot.message_handler(commands=['start'], chat_types=["private"])
 def start(message: Message):
+    """
+    Handles the /start command.
+
+    Initializes the user and either prompts for language selection
+    or displays the start menu.
+
+    :param message: Message object.
+    :return: None
+    """
     user = get_user(message)
     return pick_language(message, input_user=user) if user.language is None else start_function(message, user=user)
 
 
 @bot.message_handler(commands=['language'], chat_types=["private"])
-def pick_language(message, input_user=None):
+def pick_language(message: Message, input_user: Users = None):
+    """
+    Sends a language selection keyboard to the user.
+
+    :param message: Message object.
+    :param input_user: Optional Users instance if already known.
+    :return: None
+    """
     user = input_user or get_user(message)
     markup = InlineKeyboardMarkup()
     for chunk in chunks(list(texts.keys()), 2):
@@ -201,13 +280,25 @@ def pick_language(message, input_user=None):
 
 
 @bot.message_handler(commands=['menu'], chat_types=["private"])
-def menu(message):
+def menu(message: Message):
+    """
+    Handles the /menu command and opens the main menu.
+
+    :param message: Message object.
+    :return: None
+    """
     bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
     show_last_menu(message)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "my_trips_menu")
-def my_trips_menu_handler(call):
+def my_trips_menu_handler(call: CallbackQuery):
+    """
+    Displays the trip type selection menu (driver or passenger).
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     user = get_user(call)
     text = texts[user.language]
     bot.answer_callback_query(call.id)
@@ -220,7 +311,15 @@ def my_trips_menu_handler(call):
                           text=text.text.pick_trip_type, reply_markup=markup)
 
 
-def notify_all_if_trip_is_cancel(trip_id):
+def notify_all_if_trip_is_cancel(trip_id: str):
+    """
+    Notifies all passengers when a driver trip is canceled.
+
+    Sends a cancellation message and removes seat reservations.
+
+    :param trip_id: ID of the canceled trip.
+    :return: None
+    """
     for i in TakeASeat.select().where(TakeASeat.driver_trip_id == int(trip_id)):
         bot.send_message(i.passenger_trip.user.telegram_id,
                          text=texts[i.passenger_trip.user.language].text.cancel_trip_notification.format(
@@ -229,7 +328,13 @@ def notify_all_if_trip_is_cancel(trip_id):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("trip_del:"))
-def trip_del_handler(call):
+def trip_del_handler(call: CallbackQuery):
+    """
+    Deletes a trip and notifies passengers if applicable.
+
+    :param call: CallbackQuery object with data "trip_del:<trip_id>"
+    :return: None
+    """
     _, trip_id = call.data.split(":", 1)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -242,7 +347,13 @@ def trip_del_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cancel_trip:"))
-def cancel_trip_handler(call):
+def cancel_trip_handler(call: CallbackQuery):
+    """
+    Displays a confirmation prompt before deleting a trip.
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     _, trip_id = call.data.split(":", 1)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -256,7 +367,13 @@ def cancel_trip_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("change_st:"))
-def change_start_time_handler(call):
+def change_start_time_handler(call: CallbackQuery):
+    """
+    Opens the time picker to edit a trip's start time.
+
+    :param call: CallbackQuery object with data "change_st:<trip_id>"
+    :return: None
+    """
     _, trip_id = call.data.split(":", 1)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -266,7 +383,15 @@ def change_start_time_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("set_pname:"))
-def save_trip_handler(call):
+def save_trip_handler(call: CallbackQuery):
+    """
+    Saves a trip to a preset with the selected name.
+
+    Triggered by callback data "set_pname:<trip_id>:<name>".
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     _, trip_id, name = call.data.split(":", 2)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -279,7 +404,15 @@ def save_trip_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("save_trip:"))
-def save_trip_handler(call):
+def save_trip_handler(call: CallbackQuery):
+    """
+    Displays preset name options for saving a trip.
+
+    Triggered by callback data "save_trip:<trip_id>".
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     _, trip_id = call.data.split(":", 1)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -294,7 +427,13 @@ def save_trip_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("change_sd:"))
-def change_start_date_handler(call):
+def change_start_date_handler(call: CallbackQuery):
+    """
+    Opens the calendar to change the trip start date.
+
+    :param call: CallbackQuery object with data "change_sd:<trip_id>"
+    :return: None
+    """
     _, trip_id = call.data.split(":", 1)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -317,7 +456,13 @@ def change_start_date_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("take_a_seat:"))
-def take_a_seat_details_handler(call):
+def take_a_seat_details_handler(call: CallbackQuery):
+    """
+    Assigns a passenger to a driver's trip if seats are available.
+
+    :param call: CallbackQuery object with data "take_a_seat:<trip_id>:<from_trip_id>"
+    :return: None
+    """
     _, trip_id, from_trip_id = call.data.split(":", 2)
     trip = Trips.get_by_id(trip_id)
     user = get_user(call)
@@ -333,7 +478,13 @@ def take_a_seat_details_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("ras:"))
-def remove_a_seat_details_handler(call):
+def remove_a_seat_details_handler(call: CallbackQuery):
+    """
+    Removes a passenger seat reservation from a trip.
+
+    :param call: CallbackQuery object with data "ras:<seat_id>:<from_trip_id>"
+    :return: None
+    """
     _, marker, from_trip_id = call.data.split(":", 2)
     user = get_user(call)
     text = texts[user.language]
@@ -345,7 +496,15 @@ def remove_a_seat_details_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pt:"))
-def pick_trips_details_handler(call):
+def pick_trips_details_handler(call: CallbackQuery):
+    """
+    Displays details of a driver trip for a passenger.
+
+    Allows the user to take or remove a seat.
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     _, trip_id, from_trip_id, marker = call.data.split(":", 3)
     trip = Trips.get_by_id(trip_id)
     user = get_user(call)
@@ -366,7 +525,15 @@ def pick_trips_details_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("trip_dt:"))
-def trips_details_handler(call):
+def trips_details_handler(call: CallbackQuery):
+    """
+    Displays full details of a trip.
+
+    Shows date, time, addresses, seat info, and action buttons.
+
+    :param call: CallbackQuery object with data "trip_dt:<trip_id>"
+    :return: None
+    """
     _, trip_id = call.data.split(":", 1)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -398,7 +565,13 @@ def trips_details_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("my_trips:"))
-def my_trips_handler(call):
+def my_trips_handler(call: CallbackQuery):
+    """
+    Displays a list of the user's active trips filtered by role.
+
+    :param call: CallbackQuery object with data "my_trips:<role>"
+    :return: None
+    """
     _, role = call.data.split(":", 1)
     user = get_user(call)
     text = texts[user.language]
@@ -418,7 +591,13 @@ def my_trips_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("saved:"))
-def load_saved_trip_handler(call):
+def load_saved_trip_handler(call: CallbackQuery):
+    """
+    Creates a new trip from a saved preset and starts date selection.
+
+    :param call: CallbackQuery object with data "saved:<preset_id>"
+    :return: None
+    """
     _, preset_id = call.data.split(":", 1)
     preset = Presets.get_by_id(preset_id)
     trip = preset.trips.duplicate()
@@ -442,7 +621,13 @@ def load_saved_trip_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "load_from_preset")
-def load_from_preset_handler(call):
+def load_from_preset_handler(call: CallbackQuery):
+    """
+    Displays a list of saved presets for the user to load from.
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     user = get_user(call)
     text = texts[user.language]
     markup = InlineKeyboardMarkup()
@@ -462,6 +647,12 @@ def load_from_preset_handler(call):
 
 @bot.callback_query_handler(func=lambda call: bool(call.data) and call.data.startswith("pick_lang:"))
 def pick_language_callback(call: CallbackQuery):
+    """
+    Saves the user's selected language.
+
+    :param call: CallbackQuery object with data "pick_lang:<language_code>:<from_start>"
+    :return: None
+    """
     _, language_code, from_start = call.data.split(":", 2)
     user = get_user(call)
     user.language = language_code
@@ -473,7 +664,13 @@ def pick_language_callback(call: CallbackQuery):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("to_start:"))
-def back_to_start(call):
+def back_to_start(call: CallbackQuery):
+    """
+    Returns the user to the start menu and deletes unfinished trips if needed.
+
+    :param call: CallbackQuery object with data "to_start:<trip_id>"
+    :return: None
+    """
     _, trip_id = call.data.split(":", 1)
     if trip_id != "!":
         Trips.delete().where(Trips.id == trip_id, Trips.status == 0).execute()
@@ -482,7 +679,15 @@ def back_to_start(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('p_role:'))
-def passenger_role_handler(call):
+def passenger_role_handler(call: CallbackQuery):
+    """
+    Handles passenger role selection.
+
+    Saves the role and proceeds to location selection.
+
+    :param call: CallbackQuery object with data "p_role:<role>:<trip_id>"
+    :return: None
+    """
     _, role, trip_id = call.data.split(":", 2)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -498,14 +703,31 @@ def passenger_role_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "new_drive")
-def new_trip_handler(call):
+def new_trip_handler(call: CallbackQuery):
+    """
+    Starts a new trip creation flow.
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     start_function(call.message, user=get_user(call))
 
 
 @bot.callback_query_handler(
     func=lambda call: call.data.startswith("driver:") or call.data.startswith("passenger:") or call.data.startswith(
         "edit_places:"))
-def start_function_handler(call):
+def start_function_handler(call: CallbackQuery):
+    """
+    Handles the beginning of trip creation or seat editing.
+
+    Supports roles:
+    - driver
+    - passenger
+    - edit_places
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     role, trip_id = call.data.split(":", 1)
     if trip_id:
         bot.clear_step_handler(call.message)
@@ -548,7 +770,15 @@ def start_function_handler(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("place:") or call.data.startswith("edit_place:"))
-def space_handler(call):
+def space_handler(call: CallbackQuery):
+    """
+    Handles seat count selection or editing.
+
+    Validates seat count against current reservations and proceeds accordingly.
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     command, places, trip_id = call.data.split(":", 2)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -579,7 +809,20 @@ def space_handler(call):
             trips_details_handler(call)
 
 
-def handle_location(message, call, user, trip, to=False):
+def handle_location(message: Message, call: CallbackQuery, user: Users, trip: Trips, to: bool = False):
+    """
+    Handles user location input for origin or destination.
+
+    Saves coordinates, resolves the address, and proceeds to the next step.
+    Displays an error message if no location is provided.
+
+    :param message: Message object.
+    :param call: CallbackQuery object.
+    :param user: Users model instance.
+    :param trip: Trips model instance.
+    :param to: If True, handles destination; otherwise, handles origin.
+    :return: None
+    """
     text = texts[user.language]
     markup = InlineKeyboardMarkup()
     if message.location:
@@ -631,7 +874,15 @@ def handle_location(message, call, user, trip, to=False):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(change_calendar_callback.prefix))
-def change_calendar_callback_handler(call: telebot.types.CallbackQuery):
+def change_calendar_callback_handler(call: CallbackQuery):
+    """
+    Handles calendar interactions when editing an existing trip date.
+
+    Updates the trip date or cancels the operation.
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     name, action, year, month, day, trip_id, preset_id = call.data.split(change_calendar_callback.sep)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
@@ -650,7 +901,16 @@ def change_calendar_callback_handler(call: telebot.types.CallbackQuery):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(calendar_callback.prefix))
-def calendar_callback_handler(call: telebot.types.CallbackQuery):
+def calendar_callback_handler(call: CallbackQuery):
+    """
+    Handles calendar interactions during trip creation.
+
+    Saves the selected date and proceeds to time selection,
+    or handles cancellation logic.
+
+    :param call: CallbackQuery object.
+    :return: None
+    """
     name, action, year, month, day, trip_id, preset_id = call.data.split(calendar_callback.sep)
     trip = Trips.get_by_id(trip_id)
     user = trip.user
